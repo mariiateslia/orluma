@@ -481,7 +481,7 @@ export function RequestDetail({ request }: { request: SpendRequest }) {
   const requester = data.members.find((m) => m.id === request.requesterId);
   const approver = data.members.find((m) => m.id === request.approverId);
   const task = data.tasks.find((t) => t.id === request.taskId);
-  const documents = data.documents.filter((d) => d.projectId === project.id);
+  const documents = data.documents.filter((d) => d.projectId === project.id && !d.archived);
   const canReview =
     canEdit &&
     admin &&

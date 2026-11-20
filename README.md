@@ -31,6 +31,8 @@ npm run build
 npm start
 ```
 
+On macOS, you can also open `Start Orluma.command` to install missing dependencies, build and start the app. Keep its terminal window open while using Orluma.
+
 Open **http://localhost:3000**. Create your account, then your workspace. You can start empty or opt into the clearly labeled fictional Website launch sample.
 
 The first account bootstraps the installation. Register it locally before exposing the instance to other people. Later accounts require an invitation by default.

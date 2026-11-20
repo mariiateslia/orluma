@@ -265,7 +265,7 @@ export function ProjectOverview({ project }: { project: Project }) {
   const [task, setTask] = useState(false);
   const [doc, setDoc] = useState(false);
   const tasks = data.tasks.filter((t) => t.projectId === project.id);
-  const docs = data.documents.filter((d) => d.projectId === project.id);
+  const docs = data.documents.filter((d) => d.projectId === project.id && !d.archived);
   const activity = data.activity.filter((a) => a.projectId === project.id).slice(0, 5);
   async function archive() {
     if (!window.confirm('Archive this project? Your data stays available under Archived projects.'))
@@ -540,7 +540,7 @@ export function TaskDetail({ task }: { task: Task }) {
   const project = data.projects.find((p) => p.id === task.projectId)!;
   const assignee = data.members.find((m) => m.id === task.assigneeId);
   const requests = data.requests.filter((r) => r.taskId === task.id);
-  const docs = data.documents.filter((d) => d.projectId === task.projectId);
+  const docs = data.documents.filter((d) => d.projectId === task.projectId && !d.archived);
   async function status(value: TaskStatus) {
     setSaving(true);
     try {

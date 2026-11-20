@@ -11,4 +11,3 @@ playwright-report/
 *.sqlite-*
 .DS_Store
 coverage/
-

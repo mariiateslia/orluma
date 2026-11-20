@@ -126,6 +126,20 @@ test('two teammates share work, spending decisions and versioned documents', asy
     await expect(
       owner.getByRole('heading', { name: 'Latest team version', exact: true }),
     ).toBeVisible();
+    jo.once('dialog', (dialog) => dialog.accept());
+    await jo.getByRole('button', { name: 'Archive document', exact: true }).click();
+    await jo
+      .getByRole('group', { name: 'Document status', exact: true })
+      .getByRole('button', { name: 'Archived', exact: true })
+      .click();
+    await jo
+      .getByRole('button', { name: 'Website launch brief (draft copy)', exact: true })
+      .click();
+    await expect(
+      jo.getByRole('heading', { name: 'Jo’s competing draft', exact: true }),
+    ).toBeVisible();
+    await jo.getByRole('button', { name: 'Restore document', exact: true }).click();
+    await expect(jo.getByRole('button', { name: 'Edit document', exact: true })).toBeVisible();
     await owner
       .getByRole('navigation', { name: 'Workspace', exact: true })
       .getByRole('button', { name: 'Projects', exact: true })

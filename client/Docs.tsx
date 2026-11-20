@@ -12,10 +12,12 @@ export function DocumentsPage({ project }: { project?: Project }) {
   const { data, canEdit, go } = useApp();
   const [create, setCreate] = useState(false);
   const [query, setQuery] = useState('');
+  const [archived, setArchived] = useState(false);
   const docs = data.documents.filter(
     (d) =>
       (!project || d.projectId === project.id) &&
-      !data.projects.find((p) => p.id === d.projectId)?.archived &&
+      (project || !data.projects.find((p) => p.id === d.projectId)?.archived) &&
+      Boolean(d.archived) === archived &&
       (!query || d.title.toLowerCase().includes(query.toLowerCase())),
   );
   return (
@@ -36,6 +38,14 @@ export function DocumentsPage({ project }: { project?: Project }) {
         }
       />
       {project && <ProjectTabs project={project} active="docs" />}
+      <div className="view-switch" role="group" aria-label="Document status">
+        <button aria-pressed={!archived} onClick={() => setArchived(false)}>
+          Active
+        </button>
+        <button aria-pressed={archived} onClick={() => setArchived(true)}>
+          Archived
+        </button>
+      </div>
       <label className="search-field document-search">
         <span className="sr-only">Search documents</span>
         <input
@@ -75,8 +85,12 @@ export function DocumentsPage({ project }: { project?: Project }) {
         ))
       ) : (
         <Empty
-          title="Give your ideas a home"
-          body="Create a brief, meeting note or shared decision for a project."
+          title={archived ? 'No archived documents' : 'Give your ideas a home'}
+          body={
+            archived
+              ? 'Archived documents remain available here for reference and recovery.'
+              : 'Create a brief, meeting note or shared decision for a project.'
+          }
         />
       )}
       {create && <DocumentDialog projectId={project?.id} onClose={() => setCreate(false)} />}
@@ -165,6 +179,21 @@ export function DocumentPage({ document }: { document: Document }) {
       setBusy(false);
     }
   }
+  async function restore() {
+    setBusy(true);
+    try {
+      await api('/documents/' + document.id, 'PATCH', {
+        version: document.version,
+        archived: false,
+      });
+      await refresh();
+      notify('Document restored.');
+    } catch (e) {
+      notify((e as Error).message, true);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function archive() {
     if (!window.confirm('Archive this document? It will be removed from the active document list.'))
       return;
@@ -190,7 +219,17 @@ export function DocumentPage({ document }: { document: Document }) {
         actions={
           canEdit &&
           !project.archived &&
-          (!editing ? (
+          (document.archived ? (
+            <button
+              className="button"
+              disabled={busy}
+              onClick={() => {
+                void restore();
+              }}
+            >
+              Restore document
+            </button>
+          ) : !editing ? (
             <>
               <button className="button" onClick={begin}>
                 <Pencil />
@@ -226,6 +265,16 @@ export function DocumentPage({ document }: { document: Document }) {
         }
       />
       <ProjectTabs project={project} active="docs" />
+      {Boolean(document.archived) && (
+        <div className="notice">
+          This document is archived. Its content and discussion are preserved.
+        </div>
+      )}
+      {Boolean(project.archived) && (
+        <div className="notice">
+          This project is archived. Restore the project before editing documents.
+        </div>
+      )}
       <article className="document-page">
         <div className="document-motif" aria-hidden="true" />
         {editing ? (

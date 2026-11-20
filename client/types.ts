@@ -46,6 +46,7 @@ export type Document = {
   title: string;
   body: string;
   version: number;
+  archived: number;
   createdBy: string;
   createdAt: string;
   updatedAt: string;

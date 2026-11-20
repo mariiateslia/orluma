@@ -458,9 +458,7 @@ export function createApplication(options = {}) {
       ),
       documents: rows(
         db
-          .prepare(
-            'SELECT * FROM documents WHERE workspace_id=? AND archived=0 ORDER BY updated_at DESC',
-          )
+          .prepare('SELECT * FROM documents WHERE workspace_id=? ORDER BY updated_at DESC')
           .all(workspaceId),
       ),
       requests: rows(
