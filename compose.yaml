@@ -1,0 +1,20 @@
+services:
+  orluma:
+    build: .
+    restart: unless-stopped
+    init: true
+    environment:
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      REGISTRATION_MODE: invite
+      TRUST_PROXY: ${TRUST_PROXY:-0}
+    ports:
+      - '127.0.0.1:${PORT:-3000}:3000'
+    volumes:
+      - orluma_data:/app/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  orluma_data:

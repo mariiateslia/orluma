@@ -1,0 +1,45 @@
+{
+  "name": "orluma",
+  "version": "0.1.0",
+  "private": true,
+  "description": "An open-source workspace for small teams. Projects, docs and spending, together.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24.0.0 <27"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.js",
+    "build": "tsc --noEmit && vite build",
+    "start": "node --env-file-if-exists=.env server/index.js",
+    "test": "node --test tests/*.test.js",
+    "test:e2e": "playwright test",
+    "check": "tsc --noEmit",
+    "backup": "node --env-file-if-exists=.env scripts/backup.js",
+    "reset-password": "node --env-file-if-exists=.env scripts/reset-password.js",
+    "format": "prettier --write client server scripts tests *.ts *.json *.html *.md \"docs/**/*.md\" .github/workflows/*.yml compose.yaml",
+    "format:check": "prettier --check client server scripts tests *.ts *.json *.html *.md \"docs/**/*.md\" .github/workflows/*.yml compose.yaml"
+  },
+  "dependencies": {
+    "@fontsource-variable/archivo": "^5.3.0",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.5",
+    "helmet": "^8.3.0",
+    "lucide-react": "^1.77.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "prettier": "^3.10.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8"
+  }
+}

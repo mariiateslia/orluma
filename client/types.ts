@@ -1,0 +1,128 @@
+export type Role = 'owner' | 'admin' | 'member' | 'viewer';
+export type TaskStatus = 'todo' | 'in_progress' | 'done';
+export type RequestStatus = 'pending' | 'approved' | 'declined' | 'paid' | 'cancelled' | 'void';
+export type User = { id: string; name: string; email: string; createdAt: string };
+export type Workspace = {
+  id: string;
+  name: string;
+  role: Role;
+  isSample: number;
+  createdAt: string;
+};
+export type Member = { id: string; name: string; email: string; role: Role; joinedAt: string };
+export type Budget = { allocated: number; spent: number; reserved: number; available: number };
+export type Project = {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description: string;
+  goal: string;
+  status: 'planned' | 'active' | 'paused' | 'done';
+  currency: string;
+  budgetCents: number;
+  dueDate: string | null;
+  archived: number;
+  version: number;
+  budget: Budget;
+  createdAt: string;
+  updatedAt: string;
+};
+export type Task = {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string;
+  status: TaskStatus;
+  assigneeId: string | null;
+  dueDate: string | null;
+  archived: number;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};
+export type Document = {
+  id: string;
+  projectId: string;
+  title: string;
+  body: string;
+  version: number;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+};
+export type SpendRequest = {
+  id: string;
+  projectId: string;
+  taskId: string | null;
+  title: string;
+  reason: string;
+  amountCents: number;
+  category: string;
+  requesterId: string;
+  approverId: string;
+  status: RequestStatus;
+  declineReason: string | null;
+  paidAt: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};
+export type Expense = {
+  id: string;
+  projectId: string;
+  requestId: string | null;
+  title: string;
+  amountCents: number;
+  category: string;
+  paidOn: string;
+  note: string;
+  status: 'active' | 'void';
+  voidReason: string | null;
+  createdBy: string;
+  createdAt: string;
+};
+export type Allocation = { id: string; projectId: string; name: string; amountCents: number };
+export type Comment = {
+  id: string;
+  projectId: string;
+  entityType: 'task' | 'document' | 'request';
+  entityId: string;
+  authorId: string;
+  body: string;
+  createdAt: string;
+};
+export type Activity = {
+  id: string;
+  projectId: string | null;
+  actorName: string;
+  action: string;
+  summary: string;
+  createdAt: string;
+};
+export type WorkspaceData = {
+  workspace: Workspace;
+  projects: Project[];
+  members: Member[];
+  tasks: Task[];
+  documents: Document[];
+  requests: SpendRequest[];
+  expenses: Expense[];
+  allocations: Allocation[];
+  comments: Comment[];
+  activity: Activity[];
+};
+export type Invitation = {
+  id: string;
+  email: string;
+  role: Role;
+  expiresAt: number;
+  usedAt: string | null;
+  createdAt: string;
+};
+export type Route = {
+  workspaceId: string | null;
+  section: string;
+  id?: string;
+  tab?: string;
+  inviteToken?: string;
+};
