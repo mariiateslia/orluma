@@ -1,20 +1,51 @@
 services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: orluma
+      POSTGRES_USER: orluma
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run npm run setup:local first}
+    ports:
+      - '127.0.0.1:5433:5432'
+    volumes:
+      - orluma_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U orluma -d orluma']
+      interval: 5s
+      timeout: 3s
+      retries: 15
+  mailpit:
+    image: axllent/mailpit:v1.33.0
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:1025:1025'
+      - '127.0.0.1:8025:8025'
   orluma:
     build: .
     restart: unless-stopped
     init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
     environment:
       APP_URL: ${APP_URL:-http://localhost:3000}
-      REGISTRATION_MODE: invite
+      DATABASE_URL: postgresql://orluma:${POSTGRES_PASSWORD}@postgres:5432/orluma
+      AUTH_SECRET: ${AUTH_SECRET:?Run npm run setup:local first}
+      MAIL_FROM: ${MAIL_FROM:-Orluma <no-reply@orluma.test>}
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      BOOTSTRAP_EMAIL: ${BOOTSTRAP_EMAIL:-}
+      REGISTRATION_MODE: ${REGISTRATION_MODE:-invite}
       TRUST_PROXY: ${TRUST_PROXY:-0}
     ports:
       - '127.0.0.1:${PORT:-3000}:3000'
-    volumes:
-      - orluma_data:/app/data
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
-
 volumes:
-  orluma_data:
+  orluma_postgres:

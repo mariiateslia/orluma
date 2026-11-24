@@ -2,11 +2,11 @@
 
 ## Original Orluma assets
 
-The Orluma two-pebble mark is original SVG/CSS work included under the project’s MIT license.
+The selected Orluma two-pebble mark, with one off-center opening, was commissioned through Magnific and converted to SVG. The web derivative at `public/orluma-mark.svg` uses two paths and a transparent opening; `public/favicon.svg` contains the same mark. Generation records: [selected mark](https://www.magnific.com/app/creation/jU88tcFLD0) and [vector trace](https://www.magnific.com/app/creation/N2bbrkX6D9) (November 2026; access may require the creator’s account).
 
-`public/stone-fog.jpg` is an original AI-generated scene commissioned for Orluma. Generation record: [Orluma scene B](https://www.magnific.com/app/creation/8aiUnhQIrU) (Magnific, November 2026; access may require the creator’s account). No NOA reference image is distributed in this repository.
+`public/stone-fog.jpg` is the selected AI-generated “Soft oval” scene, commissioned for Orluma and encoded as JPEG for the web. Generation record: [Soft oval](https://www.magnific.com/app/creation/EbWWNLKuuO) (Magnific, November 2026; access may require the creator’s account). No reference photograph is distributed in this repository.
 
-Permission is granted to use, copy, modify and redistribute this generated image with Orluma and its forks. It is supplied as-is, without a claim of exclusive copyright or trademark rights. The rights you have in an AI-generated image can depend on jurisdiction and the generation provider’s terms. No claim is made over the independent NOA reference artwork, which is not included here.
+Permission is granted to use, copy, modify and redistribute these generated assets with Orluma and its forks. They are supplied as-is, without a claim of exclusive copyright or trademark rights. The rights you have in AI-generated assets can depend on jurisdiction and the generation provider’s terms. No claim is made over the independent reference artwork, which is not included here. Original generation and trace files are retained in the design working files; the web SVG is a simplified derivative, not the original signed export.
 
 ## Font
 

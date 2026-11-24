@@ -175,24 +175,9 @@ hr {
   width: 28px;
   height: 32px;
   flex-shrink: 0;
-}
-.brand-mark:before,
-.brand-mark:after {
-  content: '';
-  position: absolute;
-  width: 23px;
-  height: 11px;
-  border-radius: 50% 43% 48% 40% / 55% 45% 50% 45%;
   background: currentColor;
-  transform: rotate(-22deg);
-}
-.brand-mark:before {
-  left: 0;
-  top: 6px;
-}
-.brand-mark:after {
-  left: 5px;
-  top: 18px;
+  -webkit-mask: url('/orluma-mark.svg') center / contain no-repeat;
+  mask: url('/orluma-mark.svg') center / contain no-repeat;
 }
 .brand-button,
 .avatar-button {
@@ -650,7 +635,7 @@ hr {
   overflow: hidden;
   background:
     linear-gradient(90deg, #14170e88, transparent 80%),
-    url('/stone-fog.jpg') center 54% / cover;
+    url('/stone-fog.jpg?v=2') center 73% / cover;
   color: #f4f4ee;
   min-height: 265px;
 }
@@ -720,7 +705,7 @@ hr {
   border: 0;
   background:
     linear-gradient(90deg, #161b1490, transparent 90%),
-    url('/stone-fog.jpg') center 58% / cover;
+    url('/stone-fog.jpg?v=2') center 58% / cover;
   text-align: left;
   display: flex;
   align-items: flex-start;
@@ -1850,10 +1835,8 @@ select {
   min-height: calc(100dvh - 36px);
   border-radius: 32px;
   padding: 32px;
-  background:
-    linear-gradient(180deg, #11170d40, transparent 65%),
-    linear-gradient(90deg, #171d1260, transparent 85%),
-    url('/stone-fog.jpg') 60% center/cover;
+  background: #383c30;
+  isolation: isolate;
   color: #f3f4ed;
   display: flex;
   flex-direction: column;
@@ -1861,6 +1844,18 @@ select {
   gap: 60px;
   position: relative;
   overflow: hidden;
+}
+.auth-art::before {
+  content: '';
+  position: absolute;
+  width: 110%;
+  aspect-ratio: 2752 / 1536;
+  left: -5%;
+  bottom: 0;
+  background: url('/stone-fog.jpg?v=2') center / cover no-repeat;
+  mask-image: linear-gradient(to bottom, transparent, #000 30%);
+  pointer-events: none;
+  z-index: -1;
 }
 .auth-art-copy {
   margin-top: 60px;
@@ -2602,10 +2597,11 @@ select {
     padding: 10px;
   }
   .auth-art {
-    min-height: 290px;
+    min-height: 360px;
     padding: 23px;
     border-radius: 27px;
     background-position: 60% 60%;
+    justify-content: flex-start;
     gap: 24px;
   }
   .auth-art-copy {

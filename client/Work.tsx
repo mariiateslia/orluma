@@ -15,15 +15,17 @@ export function ProjectTabs({ project, active }: { project: Project; active: str
         ['tasks', 'Tasks'],
         ['docs', 'Docs'],
         ['budget', 'Budget'],
-      ].map(([tab, label]) => (
-        <button
-          key={tab}
-          aria-current={active === tab ? 'page' : undefined}
-          onClick={() => go(`/w/${data.workspace.id}/projects/${project.id}/${tab}`)}
-        >
-          {label}
-        </button>
-      ))}
+      ]
+        .filter(([tab]) => tab !== 'budget' || data.permissions.viewFinance)
+        .map(([tab, label]) => (
+          <button
+            key={tab}
+            aria-current={active === tab ? 'page' : undefined}
+            onClick={() => go(`/w/${data.workspace.id}/projects/${project.id}/${tab}`)}
+          >
+            {label}
+          </button>
+        ))}
     </nav>
   );
 }
@@ -54,6 +56,7 @@ export function ProjectCover({ project, open = false }: { project: Project; open
 }
 export function BudgetSummary({ project }: { project: Project }) {
   const { data, go } = useApp();
+  if (!project.budget) return null;
   return (
     <section className="inset budget-summary">
       <h2>Available to commit</h2>

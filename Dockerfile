@@ -8,13 +8,13 @@ COPY public ./public
 RUN npm run build
 
 FROM node:24-bookworm-slim AS runtime
-ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000 DATA_DIR=/app/data
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force && mkdir data && chown node:node data
+RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY server ./server
-COPY scripts/backup.js scripts/reset-password.js ./scripts/
+COPY scripts ./scripts/
 COPY LICENSE THIRD_PARTY_NOTICES.md ./
 USER node
 EXPOSE 3000

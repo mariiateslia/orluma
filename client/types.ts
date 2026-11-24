@@ -19,11 +19,11 @@ export type Project = {
   goal: string;
   status: 'planned' | 'active' | 'paused' | 'done';
   currency: string;
-  budgetCents: number;
+  budgetCents: number | null;
   dueDate: string | null;
   archived: number;
   version: number;
-  budget: Budget;
+  budget: Budget | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -101,6 +101,7 @@ export type Activity = {
   createdAt: string;
 };
 export type WorkspaceData = {
+  permissions: { viewFinance: boolean; manageFinance: boolean; requestSpending: boolean };
   workspace: Workspace;
   projects: Project[];
   members: Member[];
@@ -121,6 +122,7 @@ export type Invitation = {
   createdAt: string;
 };
 export type Route = {
+  resetToken?: string;
   workspaceId: string | null;
   section: string;
   id?: string;

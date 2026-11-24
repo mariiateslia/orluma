@@ -1,9 +1,7 @@
-import { DatabaseSync } from 'node:sqlite';
-import { resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { Writable } from 'node:stream';
-import { hashPassword } from '../server/security.js';
-import { transaction } from '../server/database.js';
+import { hashPassword } from 'better-auth/crypto';
+import { openDatabase, transaction } from '../server/database.js';
 
 async function secret(prompt) {
   process.stdout.write(prompt);
@@ -49,23 +47,28 @@ try {
   }
   if (password.length < 12 || password.length > 128 || /[\r\n]/.test(password))
     throw new Error('Use a password of 12–128 characters on one line.');
-  // Opening an existing file only avoids accidentally creating an empty installation.
-  const { existsSync } = await import('node:fs');
-  const path = resolve(process.env.DATA_DIR || './data', 'orluma.sqlite');
-  if (!existsSync(path)) throw new Error('Database not found. Check DATA_DIR.');
-  db = new DatabaseSync(path);
-  db.exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;');
-  const user = db.prepare('SELECT id FROM users WHERE email=?').get(email);
+  db = await openDatabase();
+  const user = await db.prepare('SELECT id FROM users WHERE email=?').get(email);
   if (!user) throw new Error('Account not found.');
   const hash = await hashPassword(password);
-  transaction(db, () => {
-    db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hash, user.id);
-    db.prepare('DELETE FROM sessions WHERE user_id=?').run(user.id);
+  await transaction(db, async () => {
+    const changed = await db
+      .prepare(
+        "UPDATE auth_accounts SET password=?,updated_at=now() WHERE user_id=? AND provider_id='credential'",
+      )
+      .run(hash, user.id);
+    if (changed.changes !== 1) throw new Error('Credential account not found.');
+    await db.prepare('DELETE FROM auth_sessions WHERE user_id=?').run(user.id);
+    await db
+      .prepare(
+        "DELETE FROM auth_verifications WHERE value=? AND identifier LIKE 'reset-password:%'",
+      )
+      .run(user.id);
   });
   console.log('Password reset. All sessions for this account have been revoked.');
 } catch (error) {
   console.error(`Password reset failed: ${error.message}`);
   process.exitCode = 1;
 } finally {
-  db?.close();
+  await db?.close();
 }

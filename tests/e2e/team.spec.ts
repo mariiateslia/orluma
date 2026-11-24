@@ -1,5 +1,30 @@
 import { test, expect } from '@playwright/test';
 const password = 'a-long-browser-test-password-2026';
+async function confirmEmail(page: import('@playwright/test').Page, email: string) {
+  let link = '';
+  await expect
+    .poll(async () => {
+      const messages = (await (await fetch('http://127.0.0.1:3118')).json()) as {
+        to: string;
+        subject: string;
+        text: string;
+      }[];
+      const message = messages
+        .filter((m) => m.to === email && m.subject.includes('Confirm'))
+        .at(-1);
+      link = message?.text.match(/https?:\/\/\S+/)?.[0] || '';
+      return Boolean(link);
+    })
+    .toBe(true);
+  await page.goto(link);
+  await expect(page.getByText('Email confirmed. You can now sign in.')).toBeVisible();
+  const emailInput = page.getByRole('textbox', { name: 'Email', exact: true });
+  if (await emailInput.isEditable()) await emailInput.fill(email);
+  else await expect(emailInput).toHaveValue(email);
+  await page.getByLabel('Password', { exact: true }).fill(password);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+}
+
 test('two teammates share work, spending decisions and versioned documents', async ({
   browser,
 }, testInfo) => {
@@ -19,6 +44,8 @@ test('two teammates share work, spending decisions and versioned documents', asy
     await owner.getByRole('textbox', { name: 'Email', exact: true }).fill('maya@example.test');
     await owner.getByLabel('Password', { exact: true }).fill(password);
     await owner.getByRole('button', { name: 'Create account', exact: true }).click();
+    await expect(owner.getByRole('heading', { name: 'Check your inbox.' })).toBeVisible();
+    await confirmEmail(owner, 'maya@example.test');
     await owner.getByRole('textbox', { name: 'Workspace name', exact: true }).fill('Northstar');
     await owner.getByRole('button', { name: 'Create workspace', exact: true }).click();
     await expect(owner.getByRole('heading', { name: 'A little clarity.' })).toBeVisible();
@@ -34,7 +61,7 @@ test('two teammates share work, spending decisions and versioned documents', asy
     await owner
       .getByRole('combobox', { name: 'Workspace role', exact: true })
       .selectOption('admin');
-    await owner.getByRole('button', { name: 'Create invitation link', exact: true }).click();
+    await owner.getByRole('button', { name: 'Send invitation', exact: true }).click();
     const invite = await owner
       .getByRole('textbox', { name: 'Invitation link', exact: true })
       .inputValue();
@@ -42,7 +69,9 @@ test('two teammates share work, spending decisions and versioned documents', asy
     await jo.goto(invite);
     await jo.getByRole('textbox', { name: 'Your name', exact: true }).fill('Jo Lee');
     await jo.getByLabel('Password', { exact: true }).fill(password);
-    await jo.getByRole('button', { name: 'Create account & join', exact: true }).click();
+    await jo.getByRole('button', { name: 'Create account', exact: true }).click();
+    await confirmEmail(jo, 'jo@example.test');
+    await jo.getByRole('button', { name: 'Join workspace', exact: true }).click();
     await expect(jo.getByRole('heading', { name: 'A little clarity.' })).toBeVisible();
     await owner
       .getByRole('navigation', { name: 'Workspace', exact: true })
@@ -244,6 +273,43 @@ test('two teammates share work, spending decisions and versioned documents', asy
     await owner.keyboard.press('Enter');
     await expect(owner.locator('main')).toBeFocused();
     expect(owner.url()).toBe(beforeSkip);
+    // Exercise real recovery UI and its callback route, then confirm data survived.
+    await owner
+      .getByRole('button', { name: 'Account settings for Maya Torres', exact: true })
+      .click();
+    await owner.getByRole('button', { name: 'Sign out', exact: true }).click();
+    await owner.getByRole('button', { name: 'Forgot password?', exact: true }).click();
+    await owner.getByRole('textbox', { name: 'Email', exact: true }).fill('maya@example.test');
+    await owner.getByRole('button', { name: 'Send reset link', exact: true }).click();
+    await expect(owner.getByRole('button', { name: 'Send another reset link' })).toBeVisible();
+    let resetLink = '';
+    await expect
+      .poll(async () => {
+        const messages = (await (await fetch('http://127.0.0.1:3118')).json()) as {
+          to: string;
+          subject: string;
+          text: string;
+        }[];
+        resetLink =
+          messages
+            .filter((m) => m.to === 'maya@example.test' && m.subject.includes('Reset'))
+            .at(-1)
+            ?.text.match(/https?:\/\/\S+/)?.[0] || '';
+        return Boolean(resetLink);
+      })
+      .toBe(true);
+    await owner.goto(resetLink);
+    await expect(owner.getByRole('heading', { name: 'Choose a new password.' })).toBeVisible();
+    const recoveredPassword = 'new-browser-test-passphrase-2026';
+    await owner.getByLabel('New password', { exact: true }).fill(recoveredPassword);
+    await owner.getByRole('button', { name: 'Save new password', exact: true }).click();
+    await expect(
+      owner.getByText('Password updated. Sign in with your new password.'),
+    ).toBeVisible();
+    await owner.getByRole('textbox', { name: 'Email', exact: true }).fill('maya@example.test');
+    await owner.getByLabel('Password', { exact: true }).fill(recoveredPassword);
+    await owner.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await expect(owner.getByRole('heading', { name: 'A little clarity.' })).toBeVisible();
     expect(errors).toEqual([]);
   } finally {
     await ownerContext.close();

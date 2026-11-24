@@ -137,7 +137,14 @@ export function WorkspacePages() {
     case 'docs':
       return <DocumentsPage />;
     case 'spending':
-      return <SpendingPage />;
+      return data.workspace.role === 'viewer' ? (
+        <Empty
+          title="Spending access is restricted"
+          body="Your viewer role includes tasks and documents."
+        />
+      ) : (
+        <SpendingPage />
+      );
     case 'team':
       return <TeamPage />;
     case 'settings':
