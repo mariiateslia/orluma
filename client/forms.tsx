@@ -6,7 +6,7 @@ import { Dialog, AsyncForm, Field, Empty } from './ui';
 import type { Project, Task, Document, SpendRequest, Expense } from './types';
 
 export function ProjectDialog({ project, onClose }: { project?: Project; onClose: () => void }) {
-  const { data, refresh, notify, go } = useApp();
+  const { data, refresh, notify, go, admin } = useApp();
   const [allocations, setAllocations] = useState(() =>
     project
       ? data.allocations
@@ -32,7 +32,7 @@ export function ProjectDialog({ project, onClose }: { project?: Project; onClose
             goal: String(form.get('goal')),
             status: String(form.get('status')),
             currency: String(form.get('currency') || project?.currency || 'USD'),
-            budgetCents: parseMoney(String(form.get('budget'))),
+            budgetCents: parseMoney(String(form.get('budget') || '0')),
             dueDate: String(form.get('dueDate')) || null,
             allocations: names
               .map((name, index) => ({
@@ -43,9 +43,11 @@ export function ProjectDialog({ project, onClose }: { project?: Project; onClose
           };
           if (payload.allocations.some((a) => !a.name))
             throw new Error('Give every allocation a name.');
+          const { budgetCents, currency, allocations: financeAllocations, ...metadata } = payload;
+          const visiblePayload = admin ? payload : metadata;
           const response = project
             ? await api<{ project: Project }>('/projects/' + project.id, 'PATCH', {
-                ...payload,
+                ...visiblePayload,
                 version: project.version,
               })
             : await api<{ project: Project }>(
@@ -85,89 +87,97 @@ export function ProjectDialog({ project, onClose }: { project?: Project; onClose
           <Field label="Target date">
             <input name="dueDate" type="date" defaultValue={project?.dueDate || ''} />
           </Field>
-          <Field label="Project budget">
-            <input
-              name="budget"
-              inputMode="decimal"
-              defaultValue={project ? moneyInput(project.budgetCents) : '0.00'}
-              required
-              pattern="[0-9]+([.][0-9]{1,2})?"
-            />
-          </Field>
-          <Field
-            label="Currency"
-            hint={financialRecords ? 'Currency is fixed once financial records exist.' : undefined}
-          >
-            <select
-              name="currency"
-              defaultValue={project?.currency || 'USD'}
-              disabled={Boolean(financialRecords)}
-            >
-              {['USD', 'EUR', 'GBP', 'CAD', 'AUD'].map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-          </Field>
-        </div>
-        <section className="allocation-editor">
-          <div className="section-heading">
-            <h3>Budget allocations</h3>
-            <button
-              type="button"
-              className="text-button"
-              disabled={allocations.length >= 30}
-              onClick={() => setAllocations([...allocations, { name: '', amount: '0.00' }])}
-            >
-              <Plus />
-              Add category
-            </button>
-          </div>
-          <p className="field-hint">
-            Optional. Split the budget into categories; leave the rest unallocated.
-          </p>
-          {allocations.map((row, index) => (
-            <div className="allocation-row" key={index}>
-              <Field label={'Category ' + (index + 1)}>
+          {admin && (
+            <>
+              <Field label="Project budget">
                 <input
-                  name="allocationName"
-                  value={row.name}
-                  onChange={(e) =>
-                    setAllocations((current) =>
-                      current.map((item, i) =>
-                        i === index ? { ...item, name: e.target.value } : item,
-                      ),
-                    )
-                  }
-                  maxLength={60}
-                  placeholder="e.g. Design"
-                />
-              </Field>
-              <Field label="Allocated amount">
-                <input
-                  name="allocationAmount"
+                  name="budget"
                   inputMode="decimal"
-                  value={row.amount}
-                  onChange={(e) =>
-                    setAllocations((current) =>
-                      current.map((item, i) =>
-                        i === index ? { ...item, amount: e.target.value } : item,
-                      ),
-                    )
-                  }
+                  defaultValue={project ? moneyInput(project.budgetCents ?? 0) : '0.00'}
+                  required
                   pattern="[0-9]+([.][0-9]{1,2})?"
                 />
               </Field>
+              <Field
+                label="Currency"
+                hint={
+                  financialRecords ? 'Currency is fixed once financial records exist.' : undefined
+                }
+              >
+                <select
+                  name="currency"
+                  defaultValue={project?.currency || 'USD'}
+                  disabled={Boolean(financialRecords)}
+                >
+                  {['USD', 'EUR', 'GBP', 'CAD', 'AUD'].map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </select>
+              </Field>
+            </>
+          )}
+        </div>
+        {admin && (
+          <section className="allocation-editor">
+            <div className="section-heading">
+              <h3>Budget allocations</h3>
               <button
                 type="button"
-                className="icon-button"
-                aria-label={'Remove category ' + (index + 1)}
-                onClick={() => setAllocations(allocations.filter((_, i) => i !== index))}
+                className="text-button"
+                disabled={allocations.length >= 30}
+                onClick={() => setAllocations([...allocations, { name: '', amount: '0.00' }])}
               >
-                <X />
+                <Plus />
+                Add category
               </button>
             </div>
-          ))}
-        </section>
+            <p className="field-hint">
+              Optional. Split the budget into categories; leave the rest unallocated.
+            </p>
+            {allocations.map((row, index) => (
+              <div className="allocation-row" key={index}>
+                <Field label={'Category ' + (index + 1)}>
+                  <input
+                    name="allocationName"
+                    value={row.name}
+                    onChange={(e) =>
+                      setAllocations((current) =>
+                        current.map((item, i) =>
+                          i === index ? { ...item, name: e.target.value } : item,
+                        ),
+                      )
+                    }
+                    maxLength={60}
+                    placeholder="e.g. Design"
+                  />
+                </Field>
+                <Field label="Allocated amount">
+                  <input
+                    name="allocationAmount"
+                    inputMode="decimal"
+                    value={row.amount}
+                    onChange={(e) =>
+                      setAllocations((current) =>
+                        current.map((item, i) =>
+                          i === index ? { ...item, amount: e.target.value } : item,
+                        ),
+                      )
+                    }
+                    pattern="[0-9]+([.][0-9]{1,2})?"
+                  />
+                </Field>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label={'Remove category ' + (index + 1)}
+                  onClick={() => setAllocations(allocations.filter((_, i) => i !== index))}
+                >
+                  <X />
+                </button>
+              </div>
+            ))}
+          </section>
+        )}
       </AsyncForm>
     </Dialog>
   );
@@ -382,7 +392,7 @@ export function RequestDialog({
             <Field
               label={'Amount / ' + (project?.currency || 'USD')}
               hint={
-                project
+                project?.budget
                   ? 'Available to commit: ' + money(project.budget.available, project.currency)
                   : undefined
               }

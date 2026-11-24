@@ -2,7 +2,7 @@
 
 Fork the repository, create a focused branch and open a pull request. Bug reports should describe the expected behavior, observed behavior, app version and reproduction steps with fictional data. Do not attach real team exports, invitation links, cookies or databases.
 
-Use Node.js 24.x. Install with `npm ci`, then run `npm run dev`. See the README for production and Docker setup.
+Use Node.js 24.x, PostgreSQL and local SMTP/Mailpit. Install with `npm ci`; `npm run setup:local` prepares private local configuration. Set a disposable `TEST_DATABASE_URL` (test role needs CREATEDB) and PostgreSQL client tools for verification, then run `npm run dev`. See the README for production and Docker setup.
 
 Before submitting a change:
 

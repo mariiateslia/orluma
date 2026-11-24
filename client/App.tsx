@@ -173,7 +173,7 @@ export default function App() {
   }, [workspaceId, user?.id, refresh]);
   async function logout() {
     if (dirty.current && !window.confirm('Leave without saving your draft?')) return;
-    await api('/auth/logout', 'POST', {});
+    await api('/identity/sign-out', 'POST', {});
     dirty.current = false;
     setUser(null);
     setData(null);
@@ -230,10 +230,11 @@ export default function App() {
         </button>
       </div>
     );
-  if (!user)
+  if (!user || route.section === 'reset-password')
     return (
       <Auth
         inviteToken={route.inviteToken}
+        resetToken={route.section === 'reset-password' ? route.resetToken || 'invalid' : undefined}
         onSignedIn={(u, w) => {
           void signedIn(u, w);
         }}
@@ -367,18 +368,20 @@ export default function App() {
             </span>
           </label>
           <nav className="main-nav" aria-label="Workspace">
-            {navItems.map(([path, label, Icon]) => (
-              <button
-                key={path}
-                aria-label={label}
-                aria-current={selectedSection === path ? 'page' : undefined}
-                onClick={() => go(`/w/${workspaceId}/${path}`)}
-              >
-                <Icon aria-hidden="true" />
-                <span>{label}</span>
-                {path === 'spending' && pending > 0 && <b className="nav-count">{pending}</b>}
-              </button>
-            ))}
+            {navItems
+              .filter(([path]) => path !== 'spending' || canEdit)
+              .map(([path, label, Icon]) => (
+                <button
+                  key={path}
+                  aria-label={label}
+                  aria-current={selectedSection === path ? 'page' : undefined}
+                  onClick={() => go(`/w/${workspaceId}/${path}`)}
+                >
+                  <Icon aria-hidden="true" />
+                  <span>{label}</span>
+                  {path === 'spending' && pending > 0 && <b className="nav-count">{pending}</b>}
+                </button>
+              ))}
           </nav>
           <div className="sidebar-bottom">
             <button className="text-button" onClick={() => go(`/w/${workspaceId}/settings`)}>

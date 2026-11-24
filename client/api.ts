@@ -3,7 +3,13 @@ export class ApiError extends Error {
   code: string;
   details: Record<string, unknown>;
   constructor(status: number, body: Record<string, unknown>) {
-    super(String(body.error || 'Something went wrong. Please try again.'));
+    super(
+      String(
+        body.message ||
+          (typeof body.error === 'string' ? body.error : '') ||
+          'Something went wrong. Please try again.',
+      ),
+    );
     this.status = status;
     this.code = String(body.code || 'request_failed');
     this.details = body;
@@ -14,11 +20,15 @@ export async function api<T>(
   method = 'GET',
   body?: unknown,
   signal?: AbortSignal,
+  extraHeaders?: Record<string, string>,
 ): Promise<T> {
   const response = await fetch('/api' + path, {
     method,
     credentials: 'same-origin',
-    headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+    headers: {
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      ...extraHeaders,
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
     signal,
   });
@@ -26,7 +36,7 @@ export async function api<T>(
     .json()
     .catch(() => ({ error: 'The server could not be reached. Please try again.' }));
   if (!response.ok) {
-    if (response.status === 401 && !path.startsWith('/auth/'))
+    if (response.status === 401 && !path.startsWith('/auth/') && !path.startsWith('/identity/'))
       window.dispatchEvent(new Event('orluma:session-expired'));
     throw new ApiError(response.status, result);
   }
@@ -67,6 +77,12 @@ export const initials = (name: string) =>
     .join('')
     .toUpperCase();
 export function readRoute(): import('./types').Route {
+  if (window.location.pathname === '/reset-password')
+    return {
+      workspaceId: null,
+      section: 'reset-password',
+      resetToken: new URLSearchParams(window.location.search).get('token') || '',
+    };
   const parts = window.location.hash.replace(/^#\/?/, '').split('/');
   if (parts[0] === 'invite' && parts[1])
     return { workspaceId: null, section: 'invite', inviteToken: parts[1] };

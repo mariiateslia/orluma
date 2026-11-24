@@ -1,112 +1,82 @@
-# Self-hosting Orluma
+# Self-hosting and operations
 
-Use one Node.js 24 process and one persistent SQLite database on a local disk. The current event-stream implementation is process-local. Do not run multiple app replicas against a shared network filesystem or deploy the database on ephemeral serverless storage.
+Use Node.js 24, PostgreSQL 16+ (locally verified on 17), and SMTP or Resend. Serve frontend and API at one origin. The current live event bus is process-local; run one app replica. PostgreSQL persists data independently of app restarts.
 
 ## Configuration
 
-Copy `.env.example` to `.env`. The Node entry points load this file; Compose reads its values when interpolating `compose.yaml`.
+| Variable                                | Purpose                                                                                                                                                                                                                                  |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `APP_URL`                               | Exact public origin, e.g. `https://orluma.mariateslia.site`. No subpath hosting. Used for cookies, origin checks and email callbacks.                                                                                                    |
+| `DATABASE_URL`                          | PostgreSQL URL, server only. Prefer the hosting provider’s private connection URL.                                                                                                                                                       |
+| `AUTH_SECRET`                           | At least 32 random characters, generated once; signs authentication and encrypts queued mail. Preserve across restarts/deploys.                                                                                                          |
+| `MAIL_FROM`                             | Verified sender in production, e.g. `Orluma <no-reply@auth.orluma.mariateslia.site>`.                                                                                                                                                    |
+| `RESEND_API_KEY`                        | Optional production mail API key. If set, takes precedence over SMTP.                                                                                                                                                                    |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE` | Alternative mail transport. Port 465 generally uses `SMTP_SECURE=true`; STARTTLS on 587 uses false. Non-local SMTP requires TLS by default; `SMTP_REQUIRE_TLS=false` is an explicit operator override. No certificate-validation bypass. |
+| `SMTP_USER`, `SMTP_PASSWORD`            | SMTP credentials if required. Local Mailpit needs neither.                                                                                                                                                                               |
+| `REGISTRATION_MODE`                     | `invite` by default; first account registers, later accounts require a valid email-bound invitation. `open` explicitly permits unrestricted registrations.                                                                               |
+| `BOOTSTRAP_EMAIL`                       | Initial owner email. Required on HTTPS invite-only installations; no other email can register the first account. This is not a hidden installation admin role.                                                                           |
+| `HOST`, `PORT`                          | Node bind address/port. Native local defaults to loopback; managed/container hosting uses `HOST=0.0.0.0`.                                                                                                                                |
+| `TRUST_PROXY`                           | Set `1` only behind exactly one trusted reverse proxy that overwrites forwarding headers and is the sole ingress.                                                                                                                        |
+| `NODE_ENV`                              | `production` for public deployment.                                                                                                                                                                                                      |
+| `POSTGRES_PASSWORD`                     | Local Compose database credential; native runtime uses `DATABASE_URL` instead.                                                                                                                                                           |
 
-| Variable            | Default                 | Purpose                                                                                                                                                                     |
-| ------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `APP_URL`           | `http://localhost:3000` | Exact origin used by browsers and invitation links; set to `https://your-domain.example` for a public installation. No subpath hosting in v0.1.                             |
-| `HOST`              | `127.0.0.1`             | Node bind address. Docker uses `0.0.0.0` inside the container.                                                                                                              |
-| `PORT`              | `3000`                  | Node port; in Compose, host port forwarded to container port 3000.                                                                                                          |
-| `DATA_DIR`          | `./data`                | Directory for `orluma.sqlite`. Docker fixes this to `/app/data` in a named volume.                                                                                          |
-| `REGISTRATION_MODE` | `invite`                | The first account registers, later accounts require an invitation. `open` is an explicit operator opt-in for unrestricted registration. Compose keeps this set to `invite`. |
-| `TRUST_PROXY`       | `0`                     | Set to `1` only behind exactly one trusted reverse proxy that overwrites forwarding headers and is the only route to the app.                                               |
-| `NODE_ENV`          | `production`            | Production headers and static frontend. `npm run dev` sets development mode.                                                                                                |
+Use provider environment secrets or a private `.env`; never put secrets in Vite variables, browser code or Git. Production and test databases must differ. Do not change the auth secret casually: rotation invalidates authentication links/cookies and makes pending encrypted mail unreadable. Drain the queue or invalidate/resend affected links when rotating.
 
-If POST requests say “Open Orluma at its configured URL,” the browser origin differs from `APP_URL`. Use the configured hostname consistently, including `localhost` versus `127.0.0.1`. Do not weaken the origin check.
+## Local setup
 
-## Public access
+`npm run setup:local` creates `.env` with random credentials and refuses to overwrite it. `docker compose up --build -d` runs app, Postgres and a local Mailpit inbox. The inbox and database ports bind to loopback. Keep the named database volume; `down -v` destroys it.
 
-1. Start locally and create the first account before exposing the instance.
-2. Point your own domain at a server with persistent storage. Run a TLS reverse proxy in front of the app.
-3. Set `APP_URL=https://your-domain.example` and restart Orluma. When HTTPS is configured, cookies require HTTPS.
-4. Forward `/api`, the frontend and the SSE connection to the same app origin. Disable proxy buffering for event streams and allow connections lasting longer than 60 seconds. The app sends heartbeats every 15 seconds and also refreshes on focus / every 20 seconds while visible.
-5. Create invitation links from the public URL, then share them with your team.
+For a non-Docker install, create a PostgreSQL database/role, configure `.env`, start your SMTP server, then run `npm ci`, `npm run build`, `npm start`. Startup applies pending versioned migrations under a database advisory lock. `npm run db:migrate` applies them without starting HTTP. Back up before upgrades; there are no automatic down migrations.
 
-Minimal Nginx location inside an existing HTTPS server block:
+Open exactly `APP_URL` when testing the build: `localhost` and `127.0.0.1` are different origins. Development on port 5173 is supported only in development mode; Vite proxies to the backend port from `.env`.
 
-```nginx
-location / {
-    proxy_pass http://127.0.0.1:3000;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-For $remote_addr;
-    proxy_set_header Connection "";
-    proxy_buffering off;
-    proxy_read_timeout 75s;
-}
-```
+## Publish a single shared instance
 
-For this single-proxy example, set `TRUST_PROXY=1` and keep the app’s port reachable only from the proxy host. Shared-office NATs share the authentication rate limit (30 attempts per 15 minutes per IP). Host monitoring, TLS, off-site backup retention and disk capacity are the operator’s responsibilities.
+1. Create the PostgreSQL database and web service in the same region. Link the intended Git branch. Confirm the hosting quote before provisioning paid services.
+2. Set server secrets and `BOOTSTRAP_EMAIL`. Build with `npm ci && npm run build`, start with `npm start`. Use `/api/health` for database readiness. The Node process needs an outbound connection to PostgreSQL and the selected mail provider.
+3. Connect `orluma.mariateslia.site`, configure the DNS record shown by the host, and wait for HTTPS. Set that exact `APP_URL` before sending invitations.
+4. Verify the sending domain at the email provider. Disable open/click tracking for auth emails; do not overwrite unrelated MX or SPF records.
+5. Register the bootstrap account, confirm email through a real inbox, sign in, create the workspace and invite a second test account. Verify password recovery before inviting a wider team.
+6. Keep SSE unbuffered, with a proxy timeout above 60 seconds. Sessions/memberships are rechecked on events and 15-second heartbeats; the browser refreshes on focus/every 20 seconds. Permission changes send invalidations; subsequent reads enforce the new role.
+7. Configure provider monitoring, database backup retention and a restore drill. `/api/health` does not prove that mail was delivered. Monitor `mail_outbox` status counts and provider delivery failures without logging payloads.
 
-## Back up
+A fork is a separate installation. Teammates use one shared URL; forking code does not connect their databases.
 
-Node installation, including while the app is running:
+## Backup and restore
 
-```sh
-npm run backup
-# Or specify a new destination path; existing files are never overwritten.
-npm run backup -- /secure/backups/orluma-2026-11-20.sqlite
-```
-
-This uses SQLite’s online backup API to include committed WAL transactions. A successful backup is a standalone database. It contains password hashes, sessions and private team content; store it with restricted access and encrypt off-site copies. Schedule and retain backups yourself.
-
-Docker installation:
+Install `pg_dump` / `pg_restore` of the same or newer major version than the server. These command-line tools run on an operator machine, not in the minimal app image. Set `PG_DUMP_BIN` / `PG_RESTORE_BIN` if not on PATH. Credentials are passed through environment variables rather than process arguments.
 
 ```sh
-docker compose exec orluma node scripts/backup.js /app/data/backup.sqlite
-docker compose cp orluma:/app/data/backup.sqlite ./orluma-backup.sqlite
-docker compose exec orluma node -e "require('node:fs').unlinkSync('/app/data/backup.sqlite')"
+npm run backup -- /private/backups/orluma.dump
 ```
 
-The script refuses to overwrite `backup.sqlite`; copy and remove a completed backup before creating another. Move the local copy to protected backup storage. Do not back up just the live `orluma.sqlite` file with a plain file copy while the app is writing.
+This produces a private custom-format consistent database snapshot and refuses to overwrite an existing file. Transfer it to protected off-host storage. Back up `AUTH_SECRET` separately; a SQL dump alone cannot recover encrypted pending mail. Restrict external access to managed database URLs.
 
-## Restore
-
-Restore into a **new, empty data directory or volume**, preserving the old data until you verify the recovery. Stop the app first. A restored backup must not be combined with unrelated `-wal` / `-shm` files.
-
-Node installation:
+To restore, stop the app, create a **new empty database**, configure its `DATABASE_URL` and run:
 
 ```sh
-# Stop npm start / your process manager first.
-mkdir data-restored
-cp /secure/backups/orluma-2026-11-20.sqlite data-restored/orluma.sqlite
-chmod 700 data-restored
-chmod 600 data-restored/orluma.sqlite
-# Set DATA_DIR=./data-restored in .env, then:
+npm run restore -- /private/backups/orluma.dump
 npm start
 ```
 
-For Compose, stop the service, create a new Docker volume, mount it instead of `orluma_data`, and place the backup at `orluma.sqlite` owned by UID/GID 1000. Start the same app version and verify sign-in, workspace content and balances. Backups restore the accounts and sessions captured at the time of backup; use password recovery to revoke sessions for an account if necessary.
+Restore refuses a database containing user tables. Retain the old database until row counts and user flows have been checked. JSON workspace exports are not full backups and do not contain login records.
 
-Test recovery periodically on an isolated instance. A workspace JSON export does not include account credentials and has no import UI in this release.
+## Move from SQLite v0.1
 
-## Forgotten password
+1. Stop the old app and take an untouched backup of `data/orluma.sqlite` plus its WAL if still open. Keep the old installation intact.
+2. Point this branch’s `DATABASE_URL` at a fresh PostgreSQL database. Configure mail and a stable `AUTH_SECRET`.
+3. Run `npm run import:sqlite -- /absolute/path/to/orluma.sqlite`. The importer opens the source read-only, checks the target is empty, imports users and domain rows in one transaction, preserving IDs, relationships and exact cents. Any failure rolls back.
+4. Legacy password hashes are accepted through the auth adapter. Imported accounts start unverified; users sign in, request a confirmation email and confirm ownership before accessing data. Existing browser sessions and outstanding invitations are invalidated; issue new invitations.
+5. Check table counts, workspace membership and budget totals before switching the public URL. Do not run two writable installations during the cutover.
 
-There is no email service or public password-reset endpoint. A server operator can recover a known account. Stop Orluma first, then run:
+## Password recovery
+
+The normal flow is **Sign in → Forgot password → email link → new password → sign in**. Links expire in one hour, are one-use, and resetting revokes all existing sessions. Unknown email addresses receive the same public response. Users can request another link; mail delivery is queued and retried, rather than assumed synchronous.
+
+Emergency operator recovery is available when email is unavailable. Stop Orluma first, then run:
 
 ```sh
 npm run reset-password -- person@example.com
 ```
 
-The terminal asks for a new password twice with input hidden. Never put the password in command-line arguments or committed files. Automation can explicitly use `--stdin` with a secret manager’s output. The command revokes every session for this account; restart the app and sign in with the new password.
-
-With Compose, stop the app and run a one-off container against the same volume:
-
-```sh
-docker compose stop orluma
-docker compose run --rm --no-deps orluma node scripts/reset-password.js person@example.com
-docker compose start orluma
-```
-
-## Update
-
-Back up first. Review changes, update the code, run `npm ci && npm run build`, then restart. For Compose, rebuild with `docker compose up --build -d`. The database schema initializes idempotently; future schema changes must include a migration. Do not assume a newer database is compatible with an older release.
-
-## Costs
-
-The code has no seat fee or paid API dependency. Running it on your own computer requires no hosting account. A shared public instance needs compute, persistent storage, backups and optionally a domain; those costs depend on your host. No hosting provider is provisioned by the repository.
+The terminal prompts without echoing the new password. `--stdin` is an explicit automation option; never pass passwords as arguments. Recovery revokes sessions and pending reset tokens, but does not bypass email verification.

@@ -6,4 +6,4 @@ Please use the repository’s **Security → Report a vulnerability** private re
 
 Reports are welcome for cross-workspace access, role escalation, unsafe authentication/session handling, injection, data loss and financial state inconsistencies. Include a reproduction using synthetic accounts and data. No response-time or bug-bounty commitment is made.
 
-All workspace members, including viewers, can read that workspace’s financial records. That is the current access model. Use separate workspaces when content needs a separate audience.
+Owners/admins can read full financial records. Members can read only their own spending requests and linked expenses; viewers have no financial access. General tasks and documents are shared. Report any API response, activity event, comment path or export that bypasses this model.

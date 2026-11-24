@@ -1,63 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { once } from 'node:events';
-import { createApplication } from '../server/app.js';
 
-const ORIGIN = 'http://localhost:3000';
-const PASSWORD = 'a-long-test-password-2026';
+import { applicationFixture, PASSWORD } from './support.js';
 async function fixture(t, options = {}) {
-  const directory = mkdtempSync(join(tmpdir(), 'orluma-test-'));
-  let runtime, server, base;
-  async function start() {
-    runtime = createApplication({
-      dbPath: join(directory, 'test.sqlite'),
-      appUrl: ORIGIN,
-      disableRateLimit: true,
-      ...options,
-    });
-    server = runtime.app.listen(0, '127.0.0.1');
-    await once(server, 'listening');
-    base = `http://127.0.0.1:${server.address().port}`;
-  }
-  async function stop() {
-    runtime.close();
-    server.closeAllConnections();
-    await new Promise((resolve) => server.close(resolve));
-  }
-  await start();
-  t.after(async () => {
-    await stop();
-    rmSync(directory, { recursive: true, force: true });
-  });
+  const f = await applicationFixture(t, options);
   function client() {
-    let cookie = '';
+    const raw = f.client();
     return {
       get cookie() {
-        return cookie;
+        return raw.cookie;
       },
-      async request(path, method = 'GET', body, extraHeaders = {}) {
-        const response = await fetch(base + path, {
-          method,
-          headers: {
-            Origin: ORIGIN,
-            ...(cookie ? { Cookie: cookie } : {}),
-            ...(method !== 'GET' ? { 'Content-Type': 'application/json' } : {}),
-            ...extraHeaders,
-          },
-          body: body === undefined ? undefined : JSON.stringify(body),
-        });
-        const setCookie = response.headers.get('set-cookie');
-        if (setCookie) cookie = setCookie.split(';')[0];
-        const data = await response.json();
-        return { status: response.status, data, headers: response.headers };
-      },
-      async stream(workspaceId) {
-        return fetch(base + `/api/workspaces/${workspaceId}/events`, {
-          headers: { Cookie: cookie, Origin: ORIGIN },
-        });
+      stream: raw.stream,
+      request: async (path, method = 'GET', body, headers) => {
+        if (path === '/api/auth/register') return f.register(raw, body);
+        if (path === '/api/auth/login') path = '/api/identity/sign-in/email';
+        if (path === '/api/auth/logout') path = '/api/identity/sign-out';
+        if (path === '/api/auth/password') {
+          path = '/api/identity/change-password';
+          body = { ...body, revokeOtherSessions: true };
+        }
+        return raw.request(path, method, body, headers);
       },
     };
   }
@@ -103,8 +65,7 @@ async function fixture(t, options = {}) {
     invite,
     teammate,
     restart: async () => {
-      await stop();
-      await start();
+      await f.restart();
     },
   };
 }
@@ -156,7 +117,7 @@ test('registration is invite-only after bootstrap, invitations are email-bound a
         inviteToken,
       })
     ).status,
-    400,
+    403,
   );
   assert.equal(
     (
@@ -178,7 +139,7 @@ test('registration is invite-only after bootstrap, invitations are email-bound a
         inviteToken,
       })
     ).status,
-    400,
+    403,
   );
   assert.equal(
     (await f.owner.request(`/api/workspaces/${f.workspaceId}/invitations`)).data.invitations[0]

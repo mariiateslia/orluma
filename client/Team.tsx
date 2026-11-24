@@ -16,7 +16,7 @@ function InviteDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
         <div className="invite-result">
           <p className="success-note">
             <Check />
-            Invitation ready.
+            Invitation queued for email delivery.
           </p>
           <Field
             label="Invitation link"
@@ -46,7 +46,7 @@ function InviteDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
         </div>
       ) : (
         <AsyncForm
-          submitLabel="Create invitation link"
+          submitLabel="Send invitation"
           onCancel={onClose}
           onSubmit={async (form) => {
             const response = await api<{ inviteUrl: string }>(
@@ -171,8 +171,8 @@ export function TeamPage() {
         <h2>Space to work, clear responsibilities.</h2>
         <p>
           Members work on projects, tasks and documents. Admins also manage budgets and review
-          assigned spending requests. Viewers can read the workspace. Owners manage roles and
-          ownership.
+          assigned spending requests. Members see their own requests; viewers see work without
+          financial records. Owners manage roles and ownership.
         </p>
         <p>Every spending request needs another owner or admin to review it.</p>
       </section>
@@ -264,7 +264,8 @@ export function TeamPage() {
 }
 
 export function SettingsPage() {
-  const { user, data, workspaces, admin, newWorkspace, refreshWorkspaces, notify, go } = useApp();
+  const { user, data, workspaces, admin, newWorkspace, refreshWorkspaces, notify, go, logout } =
+    useApp();
   async function leave() {
     if (
       !window.confirm(
@@ -294,6 +295,13 @@ export function SettingsPage() {
             <span>Email</span>
             <div>{user.email}</div>
           </div>
+          <button
+            type="button"
+            className="button"
+            onClick={() => void logout().catch((e) => notify(e.message, true))}
+          >
+            Sign out
+          </button>
           <section className="settings-section">
             <h2>Change password</h2>
             <AsyncForm
@@ -302,7 +310,8 @@ export function SettingsPage() {
                 const password = String(form.get('password'));
                 if (password !== String(form.get('confirm')))
                   throw new Error('The new passwords do not match.');
-                await api('/auth/password', 'POST', {
+                await api('/identity/change-password', 'POST', {
+                  revokeOtherSessions: true,
                   currentPassword: String(form.get('current')),
                   newPassword: password,
                 });

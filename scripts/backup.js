@@ -1,32 +1,40 @@
-import { DatabaseSync, backup } from 'node:sqlite';
-import { mkdirSync, linkSync, unlinkSync, chmodSync } from 'node:fs';
+import { mkdir, open, chmod, link, unlink } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
-
-// SQLite's online backup API includes committed WAL transactions.
-// Publish via a hard link so an existing backup can never be overwritten.
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+import { postgresEnvironment } from './postgres-env.js';
 process.umask(0o077);
-const sourcePath = resolve(process.env.DATA_DIR || './data', 'orluma.sqlite');
-const destination = resolve(
-  process.argv[2] || `backups/orluma-${new Date().toISOString().replaceAll(':', '-')}.sqlite`,
-);
-const temporary = `${destination}.${randomUUID()}.partial`;
-let db;
+const destination = resolve(process.argv[2] || `backups/orluma-${Date.now()}.dump`),
+  temporary = destination + '.' + randomUUID() + '.partial';
+let file;
 try {
-  mkdirSync(dirname(destination), { recursive: true, mode: 0o700 });
-  db = new DatabaseSync(sourcePath, { readOnly: true });
-  await backup(db, temporary);
-  chmodSync(temporary, 0o600);
-  linkSync(temporary, destination);
+  if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required.');
+  await mkdir(dirname(destination), { recursive: true, mode: 0o700 });
+  file = await open(temporary, 'wx', 0o600);
+  const child = spawn(
+    process.env.PG_DUMP_BIN || 'pg_dump',
+    ['--format=custom', '--no-owner', '--no-acl'],
+    {
+      env: postgresEnvironment(process.env.DATABASE_URL),
+      stdio: ['ignore', file.fd, 'pipe'],
+    },
+  );
+  child.stderr.resume();
+  const [code] = await once(child, 'close');
+  if (code !== 0)
+    throw new Error('pg_dump failed. Check the connection and PostgreSQL client version.');
+  await file.close();
+  file = null;
+  await chmod(temporary, 0o600);
+  await link(temporary, destination);
   console.log(`Backup created: ${destination}`);
 } catch (error) {
-  console.error(`Backup failed: ${error.message}`);
+  console.error('Backup failed: ' + error.message);
   process.exitCode = 1;
 } finally {
-  db?.close();
-  try {
-    unlinkSync(temporary);
-  } catch (error) {
+  await file?.close();
+  await unlink(temporary).catch((error) => {
     if (error.code !== 'ENOENT') throw error;
-  }
+  });
 }

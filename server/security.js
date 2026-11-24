@@ -2,7 +2,6 @@ import { randomBytes, createHash, scrypt as scryptCallback, timingSafeEqual } fr
 import { promisify } from 'node:util';
 const scrypt = promisify(scryptCallback);
 const scryptOptions = { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
-
 export class HttpError extends Error {
   constructor(status, message, code = 'request_failed', extra = {}) {
     super(message);
@@ -28,23 +27,8 @@ export async function checkPassword(password, encoded) {
   const expected = Buffer.from(hash, 'hex');
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
-export function cookies(header = '') {
-  return Object.fromEntries(
-    header
-      .split(';')
-      .map((part) => {
-        const position = part.indexOf('=');
-        if (position < 0) return ['', ''];
-        return [part.slice(0, position).trim(), part.slice(position + 1).trim()];
-      })
-      .filter(([key]) => key),
-  );
-}
-export function sessionCookie(value, { secure, maxAge = 7 * 86400 } = {}) {
-  return `orluma_session=${value}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secure ? '; Secure' : ''}`;
-}
-export function member(db, workspaceId, userId, roles) {
-  const membership = db
+export async function member(db, workspaceId, userId, roles) {
+  const membership = await db
     .prepare('SELECT * FROM memberships WHERE workspace_id=? AND user_id=?')
     .get(workspaceId, userId);
   assert(membership, 404, 'Workspace not found.', 'not_found');
@@ -58,15 +42,30 @@ export function member(db, workspaceId, userId, roles) {
 }
 export const editors = ['owner', 'admin', 'member'];
 export const admins = ['owner', 'admin'];
-export function scoped(db, table, entityId, userId, roles) {
+export async function scoped(db, table, entityId, userId, roles) {
   assert(
     ['projects', 'tasks', 'documents', 'spend_requests', 'expenses'].includes(table),
     500,
     'Invalid entity table.',
   );
-  const item = db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(entityId);
+  const item = await db.prepare(`SELECT * FROM ${table} WHERE id=?`).get(entityId);
   assert(item, 404, 'This item could not be found.', 'not_found');
-  member(db, item.workspace_id, userId, roles);
+  const membership = await member(db, item.workspace_id, userId, roles);
+  if (table === 'spend_requests' || table === 'expenses') {
+    let own = table === 'spend_requests' && item.requester_id === userId;
+    if (table === 'expenses' && item.request_id)
+      own = Boolean(
+        await db
+          .prepare('SELECT 1 FROM spend_requests WHERE id=? AND requester_id=?')
+          .get(item.request_id, userId),
+      );
+    assert(
+      admins.includes(membership.role) || (membership.role === 'member' && own),
+      403,
+      'You do not have access to this financial record.',
+      'finance_forbidden',
+    );
+  }
   return item;
 }
 export function expectVersion(item, version) {

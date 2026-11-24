@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from './api';
+import { api, ApiError } from './api';
 import type { User } from './types';
 import { Brand, AsyncForm, Field, ErrorMessage, Loading } from './ui';
 
@@ -7,16 +7,29 @@ type InviteInfo = { workspaceName: string; email: string; role: string; expiresA
 export function Auth({
   onSignedIn,
   inviteToken,
+  resetToken,
 }: {
   onSignedIn: (user: User, workspaceId?: string) => void;
   inviteToken?: string;
+  resetToken?: string;
 }) {
   const [meta, setMeta] = useState<{ registrationOpen: boolean; firstAccount: boolean } | null>(
     null,
   );
   const [invite, setInvite] = useState<InviteInfo | null>(null);
   const [error, setError] = useState<unknown>(null);
-  const [register, setRegister] = useState(false);
+  const [mode, setMode] = useState<'signin' | 'signup' | 'forgot' | 'check' | 'reset'>(
+    resetToken ? 'reset' : 'signin',
+  );
+  const [email, setEmail] = useState('');
+  const [mailKind, setMailKind] = useState<'verification' | 'reset'>('verification');
+  const [notice, setNotice] = useState(() =>
+    new URLSearchParams(window.location.search).get('verified') === '1'
+      ? 'Email confirmed. You can now sign in.'
+      : '',
+  );
+  const callbackURL =
+    window.location.origin + '/?verified=1' + (inviteToken ? '#/invite/' + inviteToken : '');
   useEffect(() => {
     const controller = new AbortController();
     api<{ registrationOpen: boolean; firstAccount: boolean }>(
@@ -27,7 +40,8 @@ export function Auth({
     )
       .then((value) => {
         setMeta(value);
-        setRegister(value.firstAccount || Boolean(inviteToken));
+        if (!resetToken && !new URLSearchParams(window.location.search).has('verified'))
+          setMode(value.firstAccount || inviteToken ? 'signup' : 'signin');
       })
       .catch((e) => {
         if (e.name !== 'AbortError') setError(e);
@@ -44,7 +58,15 @@ export function Auth({
           if (e.name !== 'AbortError') setError(e);
         });
     return () => controller.abort();
-  }, [inviteToken]);
+  }, [inviteToken, resetToken]);
+  const register = mode === 'signup';
+  const title = {
+    signin: 'Good to have you back.',
+    signup: 'Create your account.',
+    forgot: 'A fresh way in.',
+    check: 'Check your inbox.',
+    reset: 'Choose a new password.',
+  }[mode];
   return (
     <div className="auth-page">
       <section className="auth-art">
@@ -71,87 +93,217 @@ export function Auth({
           ) : (
             <>
               <span className="eyebrow">
-                {invite
-                  ? 'You’re invited to ' + invite.workspaceName
-                  : meta?.firstAccount
-                    ? 'Your space starts here'
-                    : 'Welcome to Orluma'}
+                {invite ? 'You’re invited to ' + invite.workspaceName : 'Welcome to Orluma'}
               </span>
-              <h2>{register ? 'Create your account.' : 'Good to have you back.'}</h2>
+              <h2>{title}</h2>
               <p className="muted">
-                {invite
-                  ? `Join as ${invite.role} with ${invite.email}.`
-                  : register
-                    ? 'Start with a workspace for your team.'
-                    : 'Sign in to pick up where your team left off.'}
+                {mode === 'check'
+                  ? `If ${email || 'this email'} has an eligible account, a link will arrive shortly. Check spam too. Links expire in one hour.`
+                  : mode === 'forgot'
+                    ? 'Enter your account email. We’ll send a link to reset your password.'
+                    : mode === 'reset'
+                      ? 'Your other sessions will be signed out after you reset your password.'
+                      : invite
+                        ? `Join as ${invite.role} with ${invite.email}.`
+                        : register
+                          ? 'Confirm your email to start a workspace for your team.'
+                          : 'Sign in to pick up where your team left off.'}
               </p>
+              {notice && (
+                <p className="success-note" role="status">
+                  {notice}
+                </p>
+              )}
               <ErrorMessage error={error} />
-              <AsyncForm
-                key={String(register) + String(inviteToken)}
-                submitLabel={
-                  register ? (invite ? 'Create account & join' : 'Create account') : 'Sign in'
-                }
-                onSubmit={async (form) => {
-                  const response = await api<{ user: User; workspaceId?: string }>(
-                    '/auth/' + (register ? 'register' : 'login'),
-                    'POST',
-                    {
-                      email: String(form.get('email')),
-                      password: String(form.get('password')),
-                      ...(register ? { name: String(form.get('name')), inviteToken } : {}),
-                    },
-                  );
-                  onSignedIn(response.user, response.workspaceId);
-                }}
-              >
-                {register && (
-                  <Field label="Your name">
-                    <input name="name" autoComplete="name" maxLength={80} required autoFocus />
-                  </Field>
-                )}
-                <Field label="Email">
-                  <input
-                    type="email"
-                    name="email"
-                    autoComplete="email"
-                    defaultValue={invite?.email || ''}
-                    readOnly={Boolean(invite)}
-                    required
-                    maxLength={254}
-                    autoFocus={!register}
-                  />
-                </Field>
-                <Field
-                  label="Password"
-                  hint={
-                    register ? 'Use at least 12 characters. A passphrase works well.' : undefined
+              {mode === 'check' ? (
+                <>
+                  <AsyncForm
+                    submitLabel={
+                      mailKind === 'reset' ? 'Send another reset link' : 'Resend confirmation email'
+                    }
+                    onSubmit={async () => {
+                      if (mailKind === 'reset')
+                        await api('/identity/request-password-reset', 'POST', {
+                          email,
+                          redirectTo: window.location.origin + '/reset-password',
+                        });
+                      else
+                        await api('/identity/send-verification-email', 'POST', {
+                          email,
+                          callbackURL,
+                        });
+                      setNotice('If a link is needed, it will arrive shortly.');
+                    }}
+                  >
+                    <p className="field-hint">
+                      {mailKind === 'reset'
+                        ? 'Use the latest reset email and keep this tab open.'
+                        : 'Confirm your email, then come back to sign in.'}
+                    </p>
+                  </AsyncForm>
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={() => {
+                      setMode('signin');
+                      setNotice('');
+                    }}
+                  >
+                    Back to sign in
+                  </button>
+                </>
+              ) : (
+                <AsyncForm
+                  key={mode + String(inviteToken)}
+                  submitLabel={
+                    mode === 'forgot'
+                      ? 'Send reset link'
+                      : mode === 'reset'
+                        ? 'Save new password'
+                        : register
+                          ? 'Create account'
+                          : 'Sign in'
                   }
+                  onSubmit={async (form) => {
+                    const inputEmail = String(form.get('email') || email).trim();
+                    setEmail(inputEmail);
+                    setNotice('');
+                    setError(null);
+                    if (mode === 'forgot') {
+                      await api('/identity/request-password-reset', 'POST', {
+                        email: inputEmail,
+                        redirectTo: window.location.origin + '/reset-password',
+                      });
+                      setMailKind('reset');
+                      setMode('check');
+                      return;
+                    }
+                    if (mode === 'reset') {
+                      await api('/identity/reset-password', 'POST', {
+                        token: resetToken,
+                        newPassword: String(form.get('password')),
+                      });
+                      window.history.replaceState(null, '', '/');
+                      setMode('signin');
+                      setNotice('Password updated. Sign in with your new password.');
+                      return;
+                    }
+                    if (register) {
+                      setMailKind('verification');
+                      await api(
+                        '/identity/sign-up/email',
+                        'POST',
+                        {
+                          email: inputEmail,
+                          name: String(form.get('name')),
+                          password: String(form.get('password')),
+                          callbackURL,
+                        },
+                        undefined,
+                        inviteToken ? { 'x-orluma-invitation': inviteToken } : undefined,
+                      );
+                      setMode('check');
+                      return;
+                    }
+                    try {
+                      const response = await api<{ user: User }>(
+                        '/identity/sign-in/email',
+                        'POST',
+                        { email: inputEmail, password: String(form.get('password')) },
+                      );
+                      onSignedIn(response.user);
+                    } catch (e) {
+                      if (e instanceof ApiError && e.code === 'EMAIL_NOT_VERIFIED') {
+                        setMailKind('verification');
+                        setMode('check');
+                        setNotice(
+                          'Confirm your email before signing in. You can request a new link below.',
+                        );
+                      } else throw e;
+                    }
+                  }}
                 >
-                  <input
-                    name="password"
-                    type="password"
-                    autoComplete={register ? 'new-password' : 'current-password'}
-                    required
-                    minLength={register ? 12 : 1}
-                    maxLength={128}
-                  />
-                </Field>
-              </AsyncForm>
-              {(meta?.registrationOpen || invite) && (
+                  {register && (
+                    <Field label="Your name">
+                      <input name="name" autoComplete="name" maxLength={80} required autoFocus />
+                    </Field>
+                  )}
+                  {mode !== 'reset' && (
+                    <Field label="Email">
+                      <input
+                        type="email"
+                        name="email"
+                        autoComplete="email"
+                        defaultValue={invite?.email || email}
+                        readOnly={Boolean(invite) && mode !== 'forgot'}
+                        required
+                        maxLength={254}
+                        autoFocus={!register}
+                      />
+                    </Field>
+                  )}
+                  {mode !== 'forgot' && (
+                    <Field
+                      label={mode === 'reset' ? 'New password' : 'Password'}
+                      hint={
+                        register || mode === 'reset'
+                          ? 'Use at least 12 characters. A passphrase works well.'
+                          : undefined
+                      }
+                    >
+                      <input
+                        name="password"
+                        type="password"
+                        autoComplete={
+                          register || mode === 'reset' ? 'new-password' : 'current-password'
+                        }
+                        required
+                        minLength={register || mode === 'reset' ? 12 : 1}
+                        maxLength={128}
+                      />
+                    </Field>
+                  )}
+                </AsyncForm>
+              )}
+              {mode === 'signin' && (
+                <p className="auth-switch">
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={() => {
+                      setError(null);
+                      setMode('forgot');
+                    }}
+                  >
+                    Forgot password?
+                  </button>
+                </p>
+              )}
+              {(mode === 'signin' || register) && (meta?.registrationOpen || invite) && (
                 <p className="auth-switch">
                   {register ? 'Already have an account?' : 'New here?'}{' '}
                   <button
                     type="button"
                     className="text-button"
-                    onClick={() => setRegister(!register)}
+                    onClick={() => {
+                      setError(null);
+                      setMode(register ? 'signin' : 'signup');
+                    }}
                   >
                     {register ? 'Sign in' : 'Create an account'}
                   </button>
                 </p>
               )}
-              {!meta?.registrationOpen && !invite && (
+              {mode === 'forgot' && (
+                <p className="auth-switch">
+                  <button type="button" className="text-button" onClick={() => setMode('signin')}>
+                    Back to sign in
+                  </button>
+                </p>
+              )}
+              {!meta?.registrationOpen && !invite && mode === 'signin' && (
                 <p className="auth-switch muted">
-                  New to this workspace? Ask your team for an invitation link.
+                  New to this workspace? Ask your team for an invitation.
                 </p>
               )}
               <p className="auth-footer">

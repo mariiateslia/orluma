@@ -10,3 +10,6 @@ playwright-report
 coverage
 *.sqlite*
 .DS_Store
+
+.local
+*.dump

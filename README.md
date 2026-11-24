@@ -1,108 +1,83 @@
 # Orluma
 
-A shared place to move things forward. An open-source workspace for small teams, with projects, tasks, documents and spending in context.
+A shared place to move things forward. An open-source workspace for small teams: projects, tasks, documents and spending in context.
 
-![Project budget in Orluma, using fictional sample data](docs/images/budget.png)
+![Project budget with fictional sample data](docs/images/budget.png)
 
-**v0.1.0 · early self-hosted release.** You own the installation and the data. No per-seat billing, hosted account service, analytics or required external API. Hosting and backups are the operator’s responsibility.
+**PostgreSQL / verified-email beta, in development.** This branch adds the production foundation to v0.1; it has not been deployed to a public service. The application is self-hosted, without per-seat billing. Operators pay for their own hosting and email delivery.
 
 ## What works
 
-- Multiple workspaces with invitations and owner, admin, member and viewer roles.
-- Projects with goals, milestones, task lists and boards, assignments and comments.
-- Markdown documents, explicit saves and version conflict recovery that keeps your draft.
-- Project budgets and allocation maps, spending requests with a separate approver, payment records and an activity trail.
-- Updates between teammates through server-sent events, with refresh on focus and a polling fallback.
-- Persistent SQLite data and sessions, workspace JSON export, online database backup and operator password recovery.
-- A responsive Stone & Fog interface, local fonts, reduced-motion support and keyboard-accessible controls.
+- Persistent PostgreSQL data, versioned migrations, backups and restore tools.
+- Email/password registration, email confirmation, sign-in, password changes and one-use password recovery with session revocation through Better Auth.
+- Email invitations, bound to a verified address, with seven-day expiry, revocation and one-use acceptance.
+- Workspaces with owner, admin, member and viewer permissions, enforced by the API.
+- Projects, task lists and boards, assignments, comments, Markdown documents and version conflict recovery.
+- Project budgets, category allocations, requests with a separate approver, recorded expenses and activity.
+- Server-sent invalidations and refresh fallback for small-team collaboration.
+- Stone & Fog visuals, bundled fonts and artwork, responsive controls and reduced-motion support.
 
-All members of a workspace can see its projects, documents and financial records. There are no private projects or field-level finance permissions in this release. Use separate workspaces for separate access boundaries.
+## Start locally
 
-## Run locally
-
-Use **Node.js 24.x** (tested on 24.14.1) and npm.
+Install Node.js 24 and Docker with Compose, then:
 
 ```sh
-git clone https://github.com/mariiateslia/orluma.git
-cd orluma
 npm ci
-cp .env.example .env
-npm run build
-npm start
-```
-
-On macOS, you can also open `Start Orluma.command` to install missing dependencies, build and start the app. Keep its terminal window open while using Orluma.
-
-Open **http://localhost:3000**. Create your account, then your workspace. You can start empty or opt into the clearly labeled fictional Website launch sample.
-
-The first account bootstraps the installation. Register it locally before exposing the instance to other people. Later accounts require an invitation by default.
-
-In **Team → Invite teammate**, create an invitation and share its link with that person. Links are bound to an email, expire after seven days and work once. Orluma does not send invitation email. Invite another admin if you want to try the approval flow: you cannot approve your own spending.
-
-`npm start`, `npm run backup` and `npm run reset-password` load `.env` automatically. Data lives in `data/orluma.sqlite` by default and survives process restarts. Do not commit this directory.
-
-For development:
-
-```sh
-npm run dev
-```
-
-Open http://localhost:5173. Vite proxies `/api` to the Node server on port 3000. Use the production build when testing the production security headers.
-
-## Run with Docker Compose
-
-```sh
-git clone https://github.com/mariiateslia/orluma.git
-cd orluma
-cp .env.example .env
+npm run setup:local
 docker compose up --build -d
 ```
 
-Open http://localhost:3000 and bootstrap the first account. Compose binds the app to the host’s loopback interface and keeps SQLite in a named volume. `docker compose down` preserves that data; **`docker compose down -v` deletes it**.
+Open **http://localhost:3000** and the local email inbox at **http://localhost:8025**. Register, open your confirmation email, follow its link, sign in and create a workspace. The optional Website launch project contains fictional data. Mailpit captures email locally; it does not deliver to real inboxes.
 
-For teammates to connect, run one shared server with a persistent disk and an HTTPS reverse proxy. Set `APP_URL` to its exact public origin, then restart. A fork of the repository creates a separate codebase; it does not connect people to the same workspace. All teammates use the URL of the same installation.
+The setup command creates random database/authentication secrets in a private, ignored `.env`. It never overwrites existing configuration. Keep these values. Compose stores PostgreSQL in a named volume; **`docker compose down -v` deletes it**.
 
-See [self-hosting and operations](docs/SELF_HOSTING.md) for proxy, backups, restore and recovery instructions.
+For native Node development, start PostgreSQL and Mailpit (e.g. `docker compose up -d postgres mailpit`), then `npm run dev`. Vite runs at http://127.0.0.1:5173 and proxies the API to `PORT` from `.env`. A production-style local build uses `npm run build && npm start` at `APP_URL`.
 
-## Roles
+See [self-hosting, migration and recovery](docs/SELF_HOSTING.md), [Maria’s service setup](docs/SETUP_FOR_MARIA_RU.md), and [architecture](docs/ARCHITECTURE.md).
 
-| Capability                                                   | Owner | Admin | Member | Viewer |
-| ------------------------------------------------------------ | ----- | ----- | ------ | ------ |
-| Read the workspace, including spending                       | Yes   | Yes   | Yes    | Yes    |
-| Tasks, docs, comments and spending requests                  | Yes   | Yes   | Yes    | —      |
-| Record payment for their approved request                    | Yes   | Yes   | Yes    | —      |
-| Create projects, manage budgets and record external payments | Yes   | Yes   | —      | —      |
-| Review a request assigned to them, from another person       | Yes   | Yes   | —      | —      |
-| Export workspace / invite members and viewers                | Yes   | Yes   | —      | —      |
-| Invite admins / change roles / remove other people           | Yes   | —     | —      | —      |
+## Access to financial data
 
-An account can create its own separate workspaces. Roles apply independently in each workspace. The last owner cannot leave or demote themselves. Resolve pending approvals before removing or demoting their assigned approver.
+| Capability                                             | Owner / admin                      | Member            | Viewer |
+| ------------------------------------------------------ | ---------------------------------- | ----------------- | ------ |
+| Read tasks and documents                               | Yes                                | Yes               | Yes    |
+| Edit work and add comments                             | Yes                                | Yes               | No     |
+| Read full budgets, allocations and all spending        | Yes                                | No                | No     |
+| Read spending requests and linked expenses             | All                                | Own requests only | No     |
+| Submit a spending request                              | Yes                                | Yes               | No     |
+| Record an approved request as paid                     | Yes                                | Own request       | No     |
+| Review a request                                       | Assigned reviewer, never their own | No                | No     |
+| Manage budgets, record/void expenses, export workspace | Yes                                | No                | No     |
+| Invite members/viewers                                 | Yes                                | No                | No     |
+| Invite admins, change roles, remove other members      | Owner only                         | No                | No     |
 
-## How money is represented
+A workspace role applies only within that workspace. The last owner cannot leave or demote themselves. Pending approvals must be resolved before removing their assigned approver. Removing or demoting someone restricts future server responses; it cannot erase data they previously viewed. General team documents and task descriptions remain shared: do not paste confidential financial details into them.
 
-Each project has one currency: USD, EUR, GBP, CAD or AUD. The app stores integer cents and never combines currencies into one total.
+## Money and scope
+
+Amounts are exact integer cents. Each project has one currency; currencies are never combined into a misleading total.
 
 ```text
-Available to commit = project budget − recorded payments − approved commitments
+Available = project budget − active recorded expenses − approved commitments
 ```
 
-A pending request reserves nothing. Approval reserves its amount atomically. Recording that approved request as paid moves the same amount from reserved to spent, once. Voiding a payment keeps its history and releases its effect on spent totals. Actual external payments can exceed the budget; the app displays the resulting shortfall. New approvals cannot exceed available funds.
+Approval reserves a planning amount atomically. Recording a payment moves it from reserved to spent once. Actual spending can exceed a budget and is displayed as a shortfall; new approvals cannot overcommit it. Allocations organize a budget, rather than enforce category caps. The contour rings are decorative, not forecasts.
 
-Category allocations organize the project budget; they are not separate enforced spending limits. Contour rings are decorative, not forecasts. Orluma records decisions and payments; it does not connect to banks, issue cards, transfer money or provide accounting compliance.
+Orluma currently records payments made elsewhere. **Bank connection and transaction import are not implemented in this branch.** The agreed next financial release targets US bank import and expense tracking; see [scope](docs/BANK_IMPORT_V1.md). There are no payouts, corporate cards or subscription charges.
 
-## Collaboration and privacy
+## Privacy and operations
 
-Changes are saved on your server, not just in one browser. Document saves use versions: if someone saved first, the app preserves your draft and lets you compare, merge or save a copy. It does not merge character-level edits live. Unsaved drafts remain only in the current tab; closing it discards them after the browser warning.
+Team records, accounts and sessions live in the operator’s PostgreSQL database. Better Auth runs inside Orluma; it is not a hosted identity account. Passwords are hashed; sessions use HttpOnly cookies, with Secure cookies on HTTPS. Mail uses configurable SMTP or Resend. Authentication links in the durable mail queue are encrypted and cleared on delivery/expiry. Keep `AUTH_SECRET` with your backups and out of Git.
 
-Passwords are hashed with scrypt. Sessions use hashed opaque tokens and HttpOnly cookies, with Secure cookies for HTTPS origins. Workspace access is checked by the server on reads, mutations, exports and event streams. Removing someone revokes future access; it cannot erase information they already viewed or downloaded.
+No analytics or AI calls are made by the app. Email content goes to the configured email provider; hosting and providers can retain technical logs. Workspace JSON exports exclude authentication records; full database backups contain sensitive team/authentication data.
 
-The application makes no analytics or AI requests. Fonts and artwork ship locally. Team content goes to the server you operate. Your hosting provider and reverse proxy may retain technical logs. Database backups contain private team and authentication data; treat them accordingly.
-
-This is an early release with tests, not an independently audited enterprise service. It has no SSO, MFA, attachments, offline editing, automated email, automatic backups or account deletion UI. Workspace JSON export is for portability and inspection; full restoration uses a database backup. See [architecture](docs/ARCHITECTURE.md).
+This beta has automated checks, but no independent security audit, SSO, MFA, private attachments, character-level live document editing, account-deletion UI or multi-instance event bus. Deployment, backup scheduling, monitoring and incident handling remain operator responsibilities.
 
 ## Verify and contribute
 
+Use a **separate disposable PostgreSQL database** and a test role with `CREATEDB`. Never use customer data. Add PostgreSQL client tools of the same or newer major version to PATH for backup/restore tests.
+
 ```sh
+# Set TEST_DATABASE_URL locally; do not commit credentials.
 npm test
 npm run build
 npx playwright install chromium
@@ -110,10 +85,10 @@ CI=1 npm run test:e2e
 npm run format:check
 ```
 
-Without `CI=1`, the browser test uses an installed Google Chrome. It creates two isolated browser sessions and a temporary database; it never uses your normal app data. CI also builds the container and checks persistence across a container restart.
+API tests use random schemas; operations tests create and remove disposable databases. Browser tests run two isolated sessions and a separate loopback-only email capture server, excluded from the production API. CI also defines a container startup/restart smoke test. Local execution of that job requires Docker.
 
-Fork the repository, create a branch and open a pull request. See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). No third-party paid service is needed to develop the app.
+Fork, create a branch and submit a pull request. See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). No paid account is required for local development.
 
 ## License and credits
 
-Code is [MIT](LICENSE). Original Orluma artwork is included for reuse with the app; see [asset and dependency credits](THIRD_PARTY_NOTICES.md). The reference images used during design exploration are not distributed in this repository. Orluma is an independent project, not a fork of Huly, Asana, Notion or Ramp.
+Code is [MIT](LICENSE). Approved Orluma imagery and the logo can be reused with the app under the terms in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Reference artwork is not redistributed.

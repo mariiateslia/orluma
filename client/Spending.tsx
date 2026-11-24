@@ -94,6 +94,7 @@ function AllocationMap({ project }: { project: Project }) {
   );
   const maximum = Math.max(...allocations.map((a) => a.amountCents), 1);
   const active = allocations.find((a) => a.id === selected) || allocations[0];
+  if (project.budgetCents === null) return null;
   if (!allocations.length)
     return (
       <section className="allocation-map">
@@ -306,6 +307,13 @@ export function BudgetPage({ project }: { project: Project }) {
   const [expense, setExpense] = useState(false);
   const [edit, setEdit] = useState(false);
   const budget = project.budget;
+  if (!budget)
+    return (
+      <Empty
+        title="Budget access is restricted"
+        body="Owners and admins manage project budgets. You can find your own requests in Spending."
+      />
+    );
   return (
     <>
       <Heading
@@ -425,7 +433,11 @@ export function SpendingPage() {
       <Heading
         muted="Team"
         title="spending"
-        sub="The work and context behind every decision."
+        sub={
+          admin
+            ? 'The work and context behind every decision.'
+            : 'Your requests and recorded expenses. Project budgets are visible to owners and admins.'
+        }
         actions={
           <>
             {admin && projects.length > 0 && (
@@ -445,17 +457,27 @@ export function SpendingPage() {
       {projects.length ? (
         <>
           <div className="spending-projects">
-            {projects.map((project) => (
-              <button
-                className="inset spending-project"
-                key={project.id}
-                onClick={() => go(`/w/${data.workspace.id}/projects/${project.id}/budget`)}
-              >
-                <span className="eyebrow">{project.name}</span>
-                <strong>{money(project.budget.available, project.currency)}</strong>
-                <span>Available / {project.currency}</span>
-              </button>
-            ))}
+            {projects
+              .filter((project) => project.budget !== null)
+              .map((project) => (
+                <button
+                  className="inset spending-project"
+                  key={project.id}
+                  onClick={() =>
+                    go(
+                      admin
+                        ? `/w/${data.workspace.id}/projects/${project.id}/budget`
+                        : `/w/${data.workspace.id}/spending`,
+                    )
+                  }
+                >
+                  <span className="eyebrow">{project.name}</span>
+                  <strong>
+                    {project.budget && money(project.budget.available, project.currency)}
+                  </strong>
+                  <span>Available / {project.currency}</span>
+                </button>
+              ))}
           </div>
           <SpendingLedger />
         </>
@@ -524,9 +546,15 @@ export function RequestDetail({ request }: { request: SpendRequest }) {
         actions={
           <button
             className="button"
-            onClick={() => go(`/w/${data.workspace.id}/projects/${project.id}/budget`)}
+            onClick={() =>
+              go(
+                admin
+                  ? `/w/${data.workspace.id}/projects/${project.id}/budget`
+                  : `/w/${data.workspace.id}/spending`,
+              )
+            }
           >
-            Back to budget
+            {admin ? 'Back to budget' : 'Back to spending'}
           </button>
         }
       />
@@ -613,7 +641,7 @@ export function RequestDetail({ request }: { request: SpendRequest }) {
             <span>Currency</span>
             <div>{project.currency}</div>
           </div>
-          {request.status === 'pending' && (
+          {request.status === 'pending' && project.budget && (
             <section className="decision-section">
               <h2>Budget impact</h2>
               <div className="property">
@@ -757,9 +785,15 @@ export function ExpenseDetail({ expense }: { expense: Expense }) {
         actions={
           <button
             className="button"
-            onClick={() => go(`/w/${data.workspace.id}/projects/${project.id}/budget`)}
+            onClick={() =>
+              go(
+                admin
+                  ? `/w/${data.workspace.id}/projects/${project.id}/budget`
+                  : `/w/${data.workspace.id}/spending`,
+              )
+            }
           >
-            Back to budget
+            {admin ? 'Back to budget' : 'Back to spending'}
           </button>
         }
       />
